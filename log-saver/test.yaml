@@ -1,0 +1,145 @@
+---
+# Source: log-saver/templates/pvc.yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: log-saver-pvc
+  annotations:
+    volume.beta.kubernetes.io/storageClassName: "vsphere-csi-sc"
+  labels:
+    chart: log-saver-1.0.0
+    release: log-saver
+    heritage: "Helm"
+spec:
+  accessModes:
+    - "ReadWriteOnce"
+  resources:
+    requests:
+      storage: 1Gi
+---
+# Source: log-saver/templates/service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: log-saver
+spec:
+  type: ClusterIP
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: 8080
+  selector:
+    app.kubernetes.io/name: log-saver
+    app.kubernetes.io/instance: log-saver
+---
+# Source: log-saver/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: log-saver
+  labels:
+    helm.sh/chart: log-saver-1.0.0
+    app.kubernetes.io/name: log-saver
+    app.kubernetes.io/instance: log-saver
+    app.kubernetes.io/version: 1.0.0
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: log-saver
+      app.kubernetes.io/instance: log-saver
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: log-saver-1.0.0
+        app.kubernetes.io/name: log-saver
+        app.kubernetes.io/instance: log-saver
+        app.kubernetes.io/version: "1.0.0"
+        app.kubernetes.io/managed-by: Helm
+    spec:
+      serviceAccountName: default
+      securityContext:
+        {}
+      containers:
+        - name: log-saver
+          securityContext:
+            {}
+          image: "michalmikula97/log-saver:1.0"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            limits:
+              cpu: 200m
+              memory: 256Mi
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          volumeMounts:
+            - mountPath: /code/src/data
+              name: logs-storage
+      volumes:
+        - name: logs-storage
+          persistentVolumeClaim:
+            claimName: log-saver-pvc
+---
+# Source: log-saver/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: log-saver
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+spec:
+  ingressClassName: cilium
+  rules:
+    - host: demo.app.t82.yunex.dev
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: log-saver
+                port:
+                  number: 8080
+  tls:
+    - hosts:
+        - demo.app.t82.yunex.dev
+      secretName: log-saver-tls
+---
+# Source: log-saver/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "log-saver-test-connection"
+  labels:
+    helm.sh/chart: log-saver-1.0.0
+    app.kubernetes.io/name: log-saver
+    app.kubernetes.io/instance: log-saver
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['log-saver:8080']
+  restartPolicy: Never

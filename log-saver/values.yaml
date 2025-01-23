@@ -29,8 +29,8 @@ resources:
     memory: 128Mi
 
 volumeMounts:
-  - name: logs-storage
-    mountPath: /data
+  - mountPath: /code/src/data
+    name: logs-storage
 
 volumes:
   - name: logs-storage
@@ -44,12 +44,8 @@ service:
 
 ingress:
   path: /
-  issuerName: ca-intermediate-issuer
+  issuerName: letsencrypt-staging
   host: demo.app.t82.yunex.dev
 
 pvc:
   storage: "1Gi"
-
-certificate:
-  dnsName: demo.app.t82.yunex.dev
-  issuer: letsencrypt-staging
