@@ -49,3 +49,7 @@ ingress:
 
 pvc:
   storage: "1Gi"
+
+certificate:
+  dnsName: demo.app.t82.yunex.dev
+  issuer: letsencrypt-staging

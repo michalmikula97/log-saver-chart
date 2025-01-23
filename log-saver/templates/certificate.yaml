@@ -1,0 +1,18 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  labels:
+    helm.sh/chart: {{ .Release.Name }}-1.0.0
+    app.kubernetes.io/name: {{ .Release.name }}
+    app.kubernetes.io/instance: {{ .Release.name }}
+    app.kubernetes.io/version: {{ .Chart.AppVersion }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  name: {{ .Release.Name }}-tls
+spec:
+  dnsNames:
+    - {{ .Values.certificate.dnsName }}
+  issuerRef:
+    group: cert-manager.io
+    kind: ClusterIssuer
+    name: {{ .Values.certificate.issuer }}
+  secretName: {{ .Release.Name }}-tls
