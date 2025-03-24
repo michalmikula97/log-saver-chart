@@ -1,0 +1,6 @@
+dependencies:
+- name: wp-library
+  repository: file://../../../../repos/wp-library/
+  version: 3.0.0
+digest: sha256:c1e4508c2bad7dffc0e5f084a35252e559e012fbea28d39e7cf3511c93ba82fe
+generated: "2025-03-21T11:44:38.512420288+01:00"

@@ -1,0 +1,5 @@
+{{/*
+This file contains directives for loading templates for Yunex app.
+It is highly recommended to not change anything in this file.
+*/}}
+{{- include "wp-library.default.tpl" . -}}

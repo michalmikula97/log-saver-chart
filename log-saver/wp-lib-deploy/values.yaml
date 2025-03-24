@@ -1,0 +1,191 @@
+# Default values for yunex-app.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This configuration is mandatory and this section cannot be removed.
+appDetails:
+  team: "dopi"
+
+global:
+  baseDomain: example.com
+
+# If you want to override the object naming convention within K8S.
+# Default value is .Chart.Name
+nameOverride:
+
+# If you want to completely override the default application name.
+# This is needed if the exact name of application is required.
+fullnameOverride: "wp-test-app"
+
+# If you want to disable Deployment creation, e.g. this chart is only layered over mainstream chart.
+disableDeployment: false
+
+# If you want to disable automatic backup of this application.
+disableAppBackup: false
+# If you want to override default time used for to wait for backup operatiom
+# Default value: 4h
+veleroBackupTimeout: 8h
+
+# Docker repository and image configuration.
+image:
+  # Select one of the repositories below.
+  # registry: its-docker.artifactory.mocca.yunextraffic.cloud
+  # registry: docker-hub.artifactory.mocca.yunextraffic.cloud
+  # registry: quay.artifactory.mocca.yunextraffic.cloud
+  registry: "michalmikula97"
+  pullPolicy: IfNotPresent
+  # If you want to override Docker image name, which by default comes from .Chart.Name
+  repository: log-saver
+  # If you want to override Docker image name, which by default comes from .Chart.Version
+  tag: "1.0"
+
+# Image pull secrets: in standard deployment leave unchanged (the default pull secrets are already present in K8S cluster).
+imagePullSecrets:
+  - name: artifactorypullsecret
+
+# Number of replicas.
+replicaCount: 1
+
+# Specifies Deployment Strategy
+# This section can be removed if not needed.
+strategy:
+  type: Recreate
+  #rollingUpdate:
+    #maxSurge: 1
+    #maxUnavailable: 1
+
+# Limit revision history for Deployment
+# This section can be removed if not needed.
+revisionHistoryLimit: 3
+
+# If you want to specify custom hostname for the Pod.
+# This section can be removed if not needed.
+hostname: something
+
+# Storage Classes: in standard deployment leave unchanged
+storageClassName: vsphere-csi-sc
+backupStorageClassName: nfs-backup
+
+# If you want to create persistent storage for your application.
+# The configuration below automatically creates PersistentVolumeClaim.
+# This section can be removed if not needed.
+persistence:
+  data:
+    size: 1Gi
+    mountPath: /code/src/data
+    # If set to true, the FileSystem backup is enabled for this persistent storage.
+    backup: true
+
+# If you want to specify resources, uncomment the following lines,
+# adjust them as necessary, and remove the curly brackets after 'resources:'.
+# This section can be removed if not needed.
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+
+# If you want to create Service object.
+# This section can be removed if not needed.
+service:
+  enabled: true
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+
+# If you want to create Ingress object. Note this may conflict with Isto Gateway if both are enabled.
+# This section can be removed if not needed.
+ingress:
+  enabled: true
+  # Use when the name of Ingress should not follow application name (default or override).
+  customHost:
+  className: "cilium"
+  annotations: {}
+  servicePort: 8080
+  paths:
+    - path: /
+      pathType: Prefix
+
+
+secrets:
+  enabled: true
+  data:
+    - name: bitnami-postgresql-secret
+      stringData:
+        postgresql-password: "{{- required \"PostgreSQL password is not set\" .Values.postgresqlPassword -}}"
+        postgresql-username: "{{- required \"PostgreSQL username is not set\" .Values.postgresqlUsername -}}"
+
+#This section defines the configuration for the postgres pg_dump job.
+postgresBackup:
+  enabled: true
+  schedule: "0 2 * * *"
+  access:
+    secretName: bitnami-postgresql-secret
+    passwordKey: postgresql-password
+    usernameKey: postgresql-username
+  servicePort: 5432
+  storageSize: "8Gi"
+  retention: 6
+#Defines the docker image is used by the k8s job that pg_dump is used inside.
+  image:
+    registry: docker-hub.artifactory.mocca.yunextraffic.cloud
+    repository: bitnami/postgresql
+    tag: 17.4.0
+
+postgresql:
+  global:
+    postgresql:
+      auth:
+        password: secret
+        database: bookstore
+        existingSecret: bitnami-postgresql-secret
+  fullnameOverride: bitnami-postgresql
+  nameOverride: bitnami-postgresql
+#Adding the required annotations for the Velero backup
+  commonAnnotations:
+    yunex.app/fullname: bitnami-postgresql
+  image:
+    registry: docker-hub.artifactory.mocca.yunextraffic.cloud
+    pullPolicy: IfNotPresent
+    pullSecrets:
+      - artifactorypullsecret
+  primary:
+    initdb:
+      scriptsConfigMap: bitnami-postgresql-init-sql
+    resources:
+      requests:
+        cpu: 100m
+        memory: 100Mi
+      limits:
+        cpu: 100m
+        memory: 100Mi
+    persistence:
+      enabled: true
+      existingClaim: "{{- include \"yunex-app.fullname\" . -}}-data-pvc"
+    livenessProbe:
+      failureThreshold: 60
+#Adding the required annotations for the Velero backup with the value of the volume name to be backed up.
+    podAnnotations:
+      backup.velero.io/backup-volumes: data
+#postgresBackup section above is creating a pvc called "{{ .Release.Name }}-postgres-backup-pvc" to store the dump file.
+#Here we mount that pvc as a volume to the pod so we can easily access dump files, to be able to restore them if needed.
+    extraVolumes:
+      - name: postgres-backup
+        persistentVolumeClaim:
+          claimName: postgres-backup-pvc
+    extraVolumeMounts:
+      - name: postgres-backup
+        mountPath: /backup
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
